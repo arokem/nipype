@@ -14,10 +14,13 @@ from nipype.interfaces.fsl.preprocess import (FAST, FLIRT, ApplyXfm,
 from nipype.interfaces.fsl.model import (Level1Design, FEAT, FEATModel,
                                          FILMGLS, FEATRegister,
                                          FLAMEO, ContrastMgr,
+                                         MultipleRegressDesign,
                                          L2Model, SMM, MELODIC)
 from nipype.interfaces.fsl.utils import (Smooth, Merge, ExtractROI, Split,
                                          ImageMaths, ImageMeants, ImageStats,
-                                         FilterRegressor)
+                                         FilterRegressor, Overlay, Slicer,
+                                         PlotTimeSeries, PlotMotionParams,
+                                         ConvertXFM)
 from nipype.interfaces.fsl.dti import (EddyCorrect, BEDPOSTX, DTIFit, 
                                        ProbTrackX, VecReg, ProjThresh,
                                        FindTheBiggest)

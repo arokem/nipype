@@ -152,7 +152,6 @@ def test4():
     mod1.iterables = dict(input1=lambda:[1,2])
     mod2.iterables = {}
     pipe.connect([(mod1,mod2,[('output1','input2')])])
-    pipe.connect([(mod1,mod2,[('output1','input2')])])
     pipe._create_flat_graph()
     pipe._execgraph = pe._generate_expanded_graph(deepcopy(pipe._flatgraph))
     yield assert_equal(len(pipe._execgraph.nodes()), 4)
@@ -222,3 +221,66 @@ def test8():
                            len(pipe._execgraph.out_edges(node))) \
                           for node in pipe._execgraph.nodes()])
     yield assert_true(edgenum[0]>0)
+
+@parametric
+def test_expansion():
+    pipe1 = pe.Workflow(name='pipe1')
+    mod1 = pe.Node(interface=TestInterface(),name='mod1')
+    mod2 = pe.Node(interface=TestInterface(),name='mod2')
+    pipe1.connect([(mod1,mod2,[('output1','input2')])])
+    pipe2 = pe.Workflow(name='pipe2')
+    mod3 = pe.Node(interface=TestInterface(),name='mod3')
+    mod4 = pe.Node(interface=TestInterface(),name='mod4')
+    pipe2.connect([(mod3,mod4,[('output1','input2')])])
+    pipe3 = pe.Workflow(name="pipe3")
+    pipe3.connect([(pipe1, pipe2, [('mod2.output1','mod4.input1')])])
+    pipe4 = pe.Workflow(name="pipe4")
+    mod5 = pe.Node(interface=TestInterface(),name='mod5')
+    pipe4.add_nodes([mod5])
+    pipe5 = pe.Workflow(name="pipe5")
+    pipe5.add_nodes([pipe4])
+    pipe6 = pe.Workflow(name="pipe6")
+    pipe6.connect([(pipe5, pipe3, [('pipe4.mod5.output1','pipe2.mod3.input1')])])
+    error_raised = False
+    try:
+        pipe6._create_flat_graph()
+    except:
+        error_raised = True
+    yield assert_false(error_raised)
+
+@parametric
+def test_iterable_expansion():
+    import nipype.pipeline.engine as pe
+    from nipype.interfaces.utility import IdentityInterface
+    wf1 = pe.Workflow(name='test')
+    node1 = pe.Node(IdentityInterface(fields=['in1']),name='node1')
+    node2 = pe.Node(IdentityInterface(fields=['in2']),name='node2')
+    node1.iterables = ('in1',[1,2])
+    wf1.connect(node1,'in1', node2, 'in2')
+    wf3 = pe.Workflow(name='group')
+    for i in [0,1,2]:
+        wf3.add_nodes([wf1.clone(name='test%d'%i)])
+    wf3._create_flat_graph()
+    yield assert_equal(len(pe._generate_expanded_graph(wf3._flatgraph).nodes()),12)
+
+def test_disconnect():
+    import nipype.pipeline.engine as pe
+    from nipype.interfaces.utility import IdentityInterface
+    a = pe.Node(IdentityInterface(fields=['a','b']),name='a')
+    b = pe.Node(IdentityInterface(fields=['a','b']),name='b')
+    flow1 = pe.Workflow(name='test')
+    flow1.connect(a,'a',b,'a')
+    flow1.disconnect(a,'a',b,'a')
+    yield assert_equal, flow1._graph.edges(), []
+
+def test_doubleconnect():
+    import nipype.pipeline.engine as pe
+    from nipype.interfaces.utility import IdentityInterface
+    a = pe.Node(IdentityInterface(fields=['a','b']),name='a')
+    b = pe.Node(IdentityInterface(fields=['a','b']),name='b')
+    flow1 = pe.Workflow(name='test')
+    flow1.connect(a,'a',b,'a')
+    x = lambda: flow1.connect(a,'b',b,'a')
+    yield assert_raises, Exception, x
+
+    

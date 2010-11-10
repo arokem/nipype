@@ -1,15 +1,40 @@
-Release 0.3.3 (FUTURE)
+Release 0.3.4 (FUTURE)
 ======================
 
-Bugs fixed
-----------
+* API: hash values for float use a string conversion upto the 10th decimal place.
+* API: Iterables in output path will always be generated as _var1_val1_var2_val2 pairs
 
-* IO
-  - DataSink properly handles lists of lists now
-  - DataGrabber has option for raising Exception on getting empty lists
+* ENH: Added support for flash processing using FreeSurfer
+* ENH: Added support for flirt matrix in BBRegister
+* ENH: Added support for FSL convert_xfm
+* ENH: hashes can be updated again without rerunning all nodes.
+* ENH: Added multipleregression design for FSL
+* ENH: Added SPM based Analyze to Nifti converter
+* ENH: Added increased support for PyXNAT
+* ENH: Added support for MCR-based binary version of SPM
 
-* Base
-  - [Fixed] bug in traits logic for 'requires' metadata
+* BF: Diffusion toolkit gets installed 
+
+Release 0.3.3 (Sep 16, 2010)
+============================
+
+* API: subject_id in ModelSpec is now deprecated
+* API: spm.Threshold 
+  - does not need mask, beta, RPV anymore
+  - takes only one image (stat_image - mind the name change)
+  - works with SPM2 SPM.mat
+  - returns additional map - pre topological FDR
+
+* ENH: Added support for Diffusion toolkit
+* ENH: Added support for FSL slicer and overlay
+* ENH: Added support for dcm2nii
+
+* BF: DataSink properly handles lists of lists now
+* BF: DataGrabber has option for raising Exception on getting empty lists
+* BF: Traits logic for 'requires' metadata
+* BF: allows workflows to be relocatable
+* BF: nested workflows with connections don't raise connection not found error
+* BF: multiple workflows with identical nodenames and iterables do not create nestsed workflows  
 
 Release 0.3.2 (Aug 03, 2010)
 ============================

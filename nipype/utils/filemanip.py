@@ -3,11 +3,15 @@
 """Miscellaneous file manipulation functions
 
 """
+
+import cPickle
+from glob import glob
+import gzip
+import logging
 import os
 import re
 import shutil
-from glob import glob
-import logging
+
 from nipype.utils.misc import isdefined
 # The md5 module is deprecated in Python 2.6, but hashlib is only
 # available as an external package for versions of python before 2.6.
@@ -28,6 +32,7 @@ except ImportError:
 import numpy as np
 
 from nipype.utils.misc import is_container
+from nipype.utils.config import config
 
 fmlogger = logging.getLogger("filemanip")
 
@@ -185,19 +190,48 @@ def copyfile(originalfile, newfile, copy=False):
     None
     
     """
-    if os.path.lexists(newfile):
-        fmlogger.warn("File: %s already exists, overwriting with %s, copy:%d" \
-            % (newfile, originalfile, copy))
+    newhash = None
+    orighash = None
+    fmlogger.debug(newfile)
+    if os.path.exists(newfile):
+        if config.get('execution', 'hash_method').lower() == 'timestamp':
+            newhash = hash_timestamp(newfile)
+        elif config.get('execution', 'hash_method').lower() == 'content':
+            newhash = hash_infile(newfile)
+        fmlogger.debug("File: %s already exists,%s, copy:%d" \
+                           % (newfile, newhash, copy))
+    #the following seems unnecessary
+    #if os.name is 'posix' and copy:
+    #    if os.path.lexists(newfile) and os.path.islink(newfile):
+    #        os.unlink(newfile)
+    #        newhash = None
     if os.name is 'posix' and not copy:
         if os.path.lexists(newfile):
-            os.unlink(newfile)
-        os.symlink(originalfile,newfile)
+            if config.get('execution', 'hash_method').lower() == 'timestamp':
+                orighash = hash_timestamp(originalfile)
+            elif config.get('execution', 'hash_method').lower() == 'content':
+                orighash = hash_infile(originalfile)
+            fmlogger.debug('Original hash: %s, %s'%(originalfile, orighash))
+            if newhash != orighash:
+                os.unlink(newfile)
+        if (newhash is None) or (newhash != orighash):
+            os.symlink(originalfile,newfile)
     else:
-        try:
-            shutil.copyfile(originalfile, newfile)
-        except shutil.Error, e:
-            fmlogger.warn(e.message)
-        
+        if newhash:
+            if config.get('execution', 'hash_method').lower() == 'timestamp':
+                orighash = hash_timestamp(originalfile)
+            elif config.get('execution', 'hash_method').lower() == 'content':
+                orighash = hash_infile(originalfile)
+        if (newhash is None) or (newhash != orighash):
+            try:
+                fmlogger.debug("Copying File: %s->%s" \
+                                  % (newfile, originalfile))
+                shutil.copyfile(originalfile, newfile)
+            except shutil.Error, e:
+                fmlogger.warn(e.message)
+        else:
+            fmlogger.debug("File: %s already exists, not overwritng, copy:%d" \
+                               % (newfile, copy))
     if originalfile.endswith(".img"):
         hdrofile = originalfile[:-4] + ".hdr"
         hdrnfile = newfile[:-4] + ".hdr"
@@ -327,3 +361,22 @@ def loadflat(infile, *args):
 
 def loadcrash(infile, *args):
     return loadflat(infile, *args)
+
+def loadpkl(infile):
+    """Load a zipped or plain cPickled file
+    """
+    if infile.endswith('pklz'):
+        pkl_file = gzip.open(infile, 'rb')
+    else:
+        pkl_file = open(infile)
+    return cPickle.load(pkl_file)
+
+def savepkl(filename, record):
+    if filename.endswith('pklz'):
+        pkl_file = gzip.open(filename, 'wb')
+    else:
+        pkl_file = open(filename, 'wb')
+    cPickle.dump(result, pkl_file)
+    pkl_file.close()
+    
+

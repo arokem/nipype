@@ -183,17 +183,16 @@ first level contrasts specified in a few steps above.
 
 contrastestimate = pe.Node(interface = spm.EstimateContrast(), name="contrastestimate")
 
+def pickfirst(l):
+    return l[0]
+
 l1analysis.connect([(modelspec,level1design,[('session_info','session_info')]),
                   (level1design,level1estimate,[('spm_mat_file','spm_mat_file')]),
                   (level1estimate,contrastestimate,[('spm_mat_file','spm_mat_file'),
                                                   ('beta_images','beta_images'),
                                                   ('residual_image','residual_image')]),
                   (contrastestimate, threshold,[('spm_mat_file','spm_mat_file'),
-                                                    ('spmT_images', 'spmT_images')]),
-                  (level1estimate,threshold,[('beta_images','beta_images'),
-                                                  ('residual_image','residual_image'),
-                                                  ('mask_image','mask_image'),
-                                                  ('RPVimage','RPVimage')]),
+                                                    (('spmT_images', pickfirst), 'stat_image')]),
                   ])
 
 """
@@ -438,9 +437,7 @@ level1.base_dir = os.path.abspath('spm_face_tutorial/workingdir')
 
 level1.connect([(infosource, datasource, [('subject_id', 'subject_id')]),
                 (datasource,l1pipeline,[('struct', 'preproc.coregister.source'),
-                                        ('func','preproc.realign.in_files')]),
-                (infosource,l1pipeline,[('subject_id','analysis.modelspec.subject_id'),
-                                        ('subject_id','paramanalysis.modelspec.subject_id')]),
+                                        ('func','preproc.realign.in_files')])
                 ])
 
 

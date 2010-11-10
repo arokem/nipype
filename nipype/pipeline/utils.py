@@ -13,8 +13,8 @@ from nipype.utils.misc import package_check
 package_check('networkx', '1.0')
 import networkx as nx
 
-from nipype.interfaces.base import CommandLine
-from nipype.utils.filemanip import fname_presuffix
+from nipype.interfaces.base import CommandLine, isdefined
+from nipype.utils.filemanip import fname_presuffix, FileNotFoundError
 
 logger = logging.getLogger('workflow')
 
@@ -156,9 +156,9 @@ def _write_detailed_dot(graph, dotfilename):
     return text
 
 def _get_valid_pathstr(pathstr):
-    for symbol in [' ','[',']']:
+    pathstr = pathstr.replace(os.sep, '..')
+    for symbol in [' ','[',']','(',')','{','}','?',':','<','>','#','!','|','"',';']:
         pathstr = pathstr.replace(symbol, '')
-    pathstr = pathstr.replace(os.sep, '_')
     pathstr = pathstr.replace(',', '.')
     return pathstr
 
@@ -193,26 +193,26 @@ def _merge_graphs(supergraph, nodes, subgraph, nodeid, iterables):
     # Retrieve edge information connecting nodes of the subgraph to other
     # nodes of the supergraph.
     supernodes = supergraph.nodes()
-    ids = [n._id for n in supernodes]
+    ids = [n._hierarchy+n._id for n in supernodes]
     edgeinfo = {}
     for n in subgraph.nodes():
-        nidx = ids.index(n._id)
+        nidx = ids.index(n._hierarchy+n._id)
         for edge in supergraph.in_edges_iter(supernodes[nidx]):
                 #make sure edge is not part of subgraph
             if edge[0] not in subgraph.nodes():
-                if n._id not in edgeinfo.keys():
-                    edgeinfo[n._id] = []
-                edgeinfo[n._id].append((edge[0],
+                if n._hierarchy+n._id not in edgeinfo.keys():
+                    edgeinfo[n._hierarchy+n._id] = []
+                edgeinfo[n._hierarchy+n._id].append((edge[0],
                                        supergraph.get_edge_data(*edge)))
     supergraph.remove_nodes_from(nodes)
     # Add copies of the subgraph depending on the number of iterables
     for i, params in enumerate(walk(iterables.items())):
         Gc = deepcopy(subgraph)
-        ids = [n._id for n in Gc.nodes()]
+        ids = [n._hierarchy+n._id for n in Gc.nodes()]
         nodeidx = ids.index(nodeid)
         paramstr = ''
         for key, val in sorted(params.items()):
-            paramstr = '_'.join((paramstr, key,
+            paramstr = '_'.join((paramstr, _get_valid_pathstr(key),
                                  _get_valid_pathstr(str(val)))) #.replace(os.sep, '_')))
             Gc.nodes()[nodeidx].set_input(key, val)
         for n in Gc.nodes():
@@ -232,8 +232,8 @@ def _merge_graphs(supergraph, nodes, subgraph, nodeid, iterables):
         supergraph.add_nodes_from(Gc.nodes())
         supergraph.add_edges_from(Gc.edges(data=True))
         for node in Gc.nodes():
-            if node._id in edgeinfo.keys():
-                for info in edgeinfo[node._id]:
+            if node._hierarchy+node._id in edgeinfo.keys():
+                for info in edgeinfo[node._hierarchy+node._id]:
                     supergraph.add_edges_from([(info[0], node, info[1])])
             node._id += str(i)
     return supergraph
@@ -268,7 +268,7 @@ def _generate_expanded_graph(graph_in):
             subnodes = nx.dfs_preorder(graph_in, node)
             subgraph = graph_in.subgraph(subnodes)
             graph_in = _merge_graphs(graph_in, subnodes,
-                                     subgraph, node._id,
+                                     subgraph, node._hierarchy+node._id,
                                      iterables)
         else:
             moreiterables = False
@@ -338,7 +338,7 @@ def _report_nodes_not_run(notrun):
     if notrun:
         logger.info("***********************************")
         for info in notrun:
-            logger.error("could not run node: %s" % info['node']._id)
+            logger.error("could not run node: %s" % '.'.join((info['node']._hierarchy,info['node']._id)))
             logger.info("crashfile: %s" % info['crashfile'])
             logger.debug("The following dependent nodes were not run")
             for subnode in info['dependents']:
@@ -364,3 +364,34 @@ def make_output_dir(outdir):
         os.mkdir(outdir)
     return outdir
 
+def modify_paths(object, relative=True, basedir=None):
+    """Modify filenames in a data structure to either full paths or relative paths
+    """
+    if not basedir:
+        basedir = os.getcwd()
+    if isinstance(object, dict):
+        out = {}
+        for key, val in sorted(object.items()):
+            if isdefined(val):
+                out[key] = modify_paths(val, relative=relative,
+                                        basedir=basedir)
+    elif isinstance(object, (list,tuple)):
+        out = []
+        for val in object:
+            if isdefined(val):
+                out.append(modify_paths(val, relative=relative,
+                                        basedir=basedir))
+        if isinstance(object, tuple):
+            out = tuple(out)
+    else:
+        if isdefined(object):
+            if isinstance(object, str) and os.path.isfile(object):
+                if relative:
+                    out = os.path.relpath(object,start=basedir)
+                else:
+                    out = os.path.abspath(os.path.join(basedir,object))
+                if not os.path.exists(out):
+                    raise FileNotFoundError('File %s not found'%out)
+            else:
+                out = object
+    return out
